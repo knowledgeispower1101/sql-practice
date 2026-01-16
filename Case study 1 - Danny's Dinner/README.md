@@ -30,16 +30,110 @@ Danny wants to use the data to answer a few simple questions about his customers
 
 ```sql
 SELECT
-  s.customer_id,
-  SUM(m.price) AS total_sales
+    s.customer_id,
+    SUM(m.price) AS total_sales
 FROM sales s
 JOIN menu m ON s.product_id = m.product_id
 GROUP BY s.customer_id
 ORDER BY s.customer_id;
 ```
 
-#### STEPS:
+**2. How many days has each customer visited the restaurant?**
 
-- Use **JOIN** to merge `sale` and `menu` tables to have information about `s.customer_id` and `m.price`.
-- Use **SUM** to calculate the total amount that each customer was spent.
-- Group the aggregated results by `s.customer_id`.
+```sql
+SELECT
+    s.customer_id,
+    COUNT(distinct s.order_date) as day
+FROM sales s
+GROUP BY s.customer_id
+ORDER BY s.customer_id;
+```
+
+**3. What was the first item from the menu purchased by each customer?**
+
+```sql
+WITH first_item_was_purchased as (
+    SELECT
+        s.customer_id,
+        me.product_name,
+        RANK() OVER(
+            PARTITION BY s.customer_id
+            ORDER BY s.order_date
+        ) as rank
+    FROM sales s
+    JOIN menu me ON me.product_id = s.product_id
+)
+SELECT
+    customer_id,
+    product_name
+FROM first_item_was_purchased
+WHERE rank = 1
+GROUP BY customer_id, product_name
+ORDER BY customer_id;
+```
+
+**4. What is the most purchased item on the menu and how many times was it purchased by all customers?**
+
+```sql
+SELECT
+    m.product_name,
+    COUNT(s.product_id) AS most_purchased_item
+FROM sales s
+JOIN menu m ON s.product_id = m.product_id
+GROUP BY m.product_name
+ORDER BY most_purchased_item DESC
+LIMIT 1;
+```
+
+**5. Which item was the most popular for each customer?**
+
+```sql
+WITH most_popular_item_of_each_customer as (
+    SELECT
+        s.customer_id,
+        COUNT(m.product_id) AS order_count,
+        m.product_name,
+        DENSE_RANK() OVER(
+            PARTITION BY s.customer_id
+            ORDER BY COUNT(s.product_id) DESC
+        ) as rank
+    FROM sales s
+    JOIN menu m ON m.product_id = s.product_id
+    GROUP BY s.customer_id
+)
+
+SELECT
+    customer_id,
+    product_name,
+    order_count
+FROM most_popular_item_of_each_customer
+WHERE rank = 1
+ORDER BY customer_id;
+```
+
+**6. Which item was purchased first by the customer after they became a member?**
+
+```sql
+WITH first_purchased_item AS (
+SELECT
+    m.product_name,
+    s.customer_id,
+	s.order_date,
+    RANK() OVER (
+        PARTITION BY s.customer_id
+        ORDER BY order_date
+    ) as rank
+FROM sales s
+JOIN members mem ON mem.customer_id = s.customer_id AND s.order_date > mem.join_date
+JOIN menu m ON m.product_id = s.product_id
+)
+
+SELECT customer_id, product_name FROM item_was_purchase_first WHERE rank = 1;
+```
+
+#### Answer:
+
+| customer_id | product_name |
+| ----------- | ------------ |
+| A           | ramen        |
+| B           | sushi        |
